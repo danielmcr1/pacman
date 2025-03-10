@@ -1,0 +1,104 @@
+# This pipeline triggers when changes are made to dev, sit, or master branches
+trigger:
+  branches:
+    include:
+      - dev
+      - sit
+      - master
+
+# Specifies the type of agent (a virtual machine) that will run the pipeline
+pool:
+  vmImage: 'ubuntu-latest'
+
+# Define the different stages in the pipeline
+stages:
+
+# Stage 1: Build and Test, this runs every time code is pushed to dev, sit, or master
+- stage: Build
+  displayName: 'Build and Test'
+  jobs:
+  - job: Build
+    steps:
+    # Install Node.js (Required for running JavaScript applications like Pacman)
+    - task: NodeTool@0
+      inputs:
+        versionSpec: '14.x' # Using Node.js version 14
+      displayName: 'Install Node.js'
+
+    # Install all project dependencies from package.json
+    - script: npm install
+      displayName: 'Install Dependencies'
+
+    # Build the project 
+    - script: npm run build
+      displayName: 'Build Project'
+
+    # Run tests (can be replaced with real test commands)
+    - script: npm test
+      displayName: 'Run Tests'
+
+    # Save the build output as an artifact so it can be deployed later
+    - task: PublishBuildArtifacts@1
+      inputs:
+        PathtoPublish: 'dist' # Path to the built project
+        ArtifactName: 'drop' # Name of the artifact (folder where files are stored)
+        publishLocation: 'Container'
+      displayName: 'Publish Artifacts'
+
+# Stage 2: Deploy to SIT (System Integration Testing)
+- stage: Deploy_SIT
+  displayName: 'Deploy to SIT'
+  condition: and(succeeded(), eq(variables['Build.SourceBranchName'], 'sit')) # Only runs when merging to SIT branch
+  jobs:
+  - deployment: SIT_Deploy
+    environment: SIT # Defines SIT environment in Azure DevOps
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - script: echo "Deploying to SIT..."
+            displayName: 'Simulate SIT Deployment' # Replace this with actual deployment steps
+
+          # Generate Release Notes for SIT
+          - script: |
+              echo "## SIT Release Notes" > release_notes_sit.md
+              echo "### Changes Deployed:" >> release_notes_sit.md
+              git log --oneline -n 10 >> release_notes_sit.md # Fetch last 10 commits
+            displayName: 'Generate SIT Release Notes'
+
+          # Publish the SIT release notes as a pipeline artifact
+          - task: PublishBuildArtifacts@1
+            inputs:
+              PathtoPublish: 'release_notes_sit.md'
+              ArtifactName: 'SIT_Release_Notes'
+              publishLocation: 'Container'
+            displayName: 'Publish SIT Release Notes'
+
+# Stage 3: Deploy to Production
+- stage: Deploy_Production
+  displayName: 'Deploy to Production'
+  condition: and(succeeded(), eq(variables['Build.SourceBranchName'], 'master')) # Only runs when merging to master branch
+  jobs:
+  - deployment: PROD_Deploy
+    environment: Production # Defines Production environment in Azure DevOps
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - script: echo "Deploying to Production..."
+            displayName: 'Simulate PROD Deployment' # Replace this with actual deployment steps
+
+          # Generate Release Notes for Production
+          - script: |
+              echo "## Production Release Notes" > release_notes_prod.md
+              echo "### Changes Deployed:" >> release_notes_prod.md
+              git log --oneline -n 10 >> release_notes_prod.md # Fetch last 10 commits
+            displayName: 'Generate Production Release Notes'
+
+          # Publish the Production release notes as a pipeline artifact
+          - task: PublishBuildArtifacts@1
+            inputs:
+              PathtoPublish: 'release_notes_prod.md'
+              ArtifactName: 'Production_Release_Notes'
+              publishLocation: 'Container'
+            displayName: 'Publish Production Release Notes'
