@@ -40,8 +40,8 @@ stages:
           publishLocation: 'Container'
         displayName: 'Publish Artifacts'
 
-# stage 2: deploy to azure static web apps via azure cli
 
+# stage 3: deploy to azure static web apps with azure cli
 
 - stage: Deploy_StaticWebApp
   displayName: 'Deploy to Azure Static Web Apps'
@@ -71,5 +71,5 @@ stages:
             --resource-group $(RESOURCE_GROUP) `
             --subscription $(AZURE_SUBSCRIPTION) `
             --output-location "$(Pipeline.Workspace)\drop" `
-            --api-token $(AZURE_STATIC_WEB_APPS_API_TOKEN)
+            --api-token $env:AZURE_STATIC_WEB_APPS_API_TOKEN
         displayName: 'Deploy via Azure CLI'
