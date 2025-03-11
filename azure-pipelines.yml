@@ -1,65 +1,75 @@
-# This pipeline triggers when changes are made to the production branch
 trigger:
   branches:
     include:
       - production
 
-# Specifies the type of agent (a self-hosted machine) that will run the pipeline
 pool:
   name: LocalMachine
   demands: Agent.Name -equals Agent1
 
-# Define the different stages in the pipeline
+variables:
+- group: pacman-prod-vars
+
 stages:
 
-# Stage 1: Build, this runs when code is pushed to the production branch
+# stage 1: build and publish artifact
+
 - stage: Build
   displayName: 'Build and Publish Artifact'
   jobs:
   - job: Build
+    displayName: 'Build Job'
     steps:
-    
-    # Checkout the repository, disabling Git LFS (since it's not used)
-    - checkout: self
-      fetchDepth: 1
-      lfs: false  # Disable Git LFS
+      - checkout: self
+        fetchDepth: 1
+        lfs: false
+        clean: false
 
-    # Install all project dependencies from package.json
-    - powershell: |
-        npm install
-      displayName: 'Install Dependencies'
+      - powershell: |
+          npm install
+        displayName: 'Install Dependencies'
 
-    # Build the project
-    - powershell: |
-        npm run build
-      displayName: 'Build Project'
+      - powershell: |
+          npm run build
+        displayName: 'Build Project'
 
-    # Save the build output as an artifact so it can be deployed later
-    - task: PublishBuildArtifacts@1
-      inputs:
-        PathtoPublish: 'dist' # Path to the built project
-        ArtifactName: 'drop' # Name of the artifact (folder where files are stored)
-        publishLocation: 'Container'
-      displayName: 'Publish Artifacts'
+      - task: PublishBuildArtifacts@1
+        inputs:
+          PathtoPublish: 'dist'       # folder containing  built project
+          ArtifactName: 'drop'         # artifact name
+          publishLocation: 'Container'
+        displayName: 'Publish Artifacts'
 
-# Stage 2: Deploy to Azure Static Web Apps
-- stage: Deploy
+# stage 2: deploy to azure static web apps via azure cli
+
+
+- stage: Deploy_StaticWebApp
   displayName: 'Deploy to Azure Static Web Apps'
-  condition: and(succeeded(), eq(variables['Build.SourceBranchName'], 'production')) # Only runs on production branch
+  condition: and(succeeded(), eq(variables['Build.SourceBranchName'], 'production'))
   jobs:
-    - job: Deploy
-      steps:
-        # Checkout the repository and clean before deployment
-        - checkout: self
-          fetchDepth: 1
-          lfs: false  # Disable Git LFS
-          clean: true  # Clean the working directory before checkout
+  - job: Deploy
+    displayName: 'Deploy to Azure Static Web Apps'
+    steps:
+      - checkout: self
+        fetchDepth: 1
+        lfs: false
+        clean: false
 
-        # Deploy to Azure Static Web Apps
-        - task: AzureStaticWebApp@0
-          inputs:
-            app_location: '/'  # Root of the app
-            api_location: 'null'  # No API used
-            output_location: 'dist'  # Build folder
-            azure_static_web_apps_api_token: $(AZURE_STATIC_WEBAPPS_API_TOKEN) # The secret token
-          displayName: 'Deploy to Azure Static Web Apps'
+      - task: DownloadBuildArtifacts@0
+        inputs:
+          artifactName: 'drop'
+          downloadPath: '$(Pipeline.Workspace)'
+        displayName: 'Download Artifact'
+
+      - powershell: |
+          Write-Host "Logging in to Azure CLI using service principal..."
+          az login --service-principal -u $(AZURE_APP_ID) -p $(AZURE_APP_SECRET) --tenant $(AZURE_TENANT)
+          
+          Write-Host "Deploying to Azure Static Web App..."
+          az staticwebapp upload `
+            --name $(WEBAPP_NAME) `
+            --resource-group $(RESOURCE_GROUP) `
+            --subscription $(AZURE_SUBSCRIPTION) `
+            --output-location "$(Pipeline.Workspace)\drop" `
+            --api-token $(AZURE_STATIC_WEB_APPS_API_TOKEN)
+        displayName: 'Deploy via Azure CLI'
