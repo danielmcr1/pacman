@@ -35,7 +35,7 @@ stages:
 
       - task: PublishBuildArtifacts@1
         inputs:
-          PathtoPublish: 'dist'       # folder containing  built project
+          PathtoPublish: 'dist'       # folder containing built project
           ArtifactName: 'drop'         # artifact name
           publishLocation: 'Container'
         displayName: 'Publish Artifacts'
@@ -66,10 +66,10 @@ stages:
           az login --service-principal -u $(AZURE_APP_ID) -p $(AZURE_APP_SECRET) --tenant $(AZURE_TENANT)
           
           Write-Host "Deploying to Azure Static Web App..."
-          az staticwebapp upload `
+          az staticwebapp deploy `
             --name $(WEBAPP_NAME) `
             --resource-group $(RESOURCE_GROUP) `
             --subscription $(AZURE_SUBSCRIPTION) `
-            --output-location "$(Pipeline.Workspace)\drop" `
+            --app-artifact-location "$(Pipeline.Workspace)\drop" `
             --api-token $env:AZURE_STATIC_WEB_APPS_API_TOKEN
         displayName: 'Deploy via Azure CLI'
