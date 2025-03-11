@@ -30,6 +30,13 @@ stages:
               echo "Building the application..."
               npm run build
             displayName: 'Build Application'
+          # save the build output as an artifact so it can be deployed later
+          - task: PublishBuildArtifacts@1
+            inputs:
+              PathtoPublish: 'dist' # path to the built project
+              ArtifactName: 'drop' # name of the artifact (folder where files are stored)
+              publishLocation: 'Container'
+            displayName: 'Publish Artifacts'
 
   # test stage: simulated testing step (replace with npm test script in package.json)
   - stage: Test
@@ -61,11 +68,18 @@ stages:
             clean: false
             fetchDepth: 1
             lfs: false
+          - task: DownloadBuildArtifacts@0
+            displayName: 'Download Build Artifacts'
+            inputs:
+              buildType: 'current'
+              downloadType: 'single'
+              artifactName: 'drop'
+              downloadPath: '$(Pipeline.Workspace)'
           - task: AzureStaticWebApp@0
             displayName: 'Deploy to Production Static Web App'
             inputs:
               app_location: '/'
               api_location: 'null'
-              output_location: 'dist'
+              output_location: '$(Pipeline.Workspace)/drop'
               skip_app_build: true
               azure_static_web_apps_api_token: '$(AZURE_STATIC_WEBAPPS_API_TOKEN)'
