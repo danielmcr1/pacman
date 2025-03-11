@@ -4,7 +4,7 @@ trigger:
     include:
       - staging
 
-# use an Ubuntu agent for the pipeline jobs (self hosted for now)
+# use an ubuntu agent for the pipeline jobs (self hosted for now)
 pool:
   name: LocalMachine
   demands: Agent.Name -equals Agent1
@@ -38,6 +38,10 @@ stages:
       - job: TestJob
         displayName: 'Simulated Testing'
         steps:
+          - checkout: self
+            clean: false
+            fetchDepth: 1
+            lfs: false
           - script: |
               echo "Simulating tests."
             displayName: 'Simulate Test Run'
@@ -52,6 +56,10 @@ stages:
         variables:
           - group: pacman-st-vars  # load staging variables
         steps:
+          - checkout: self
+            clean: false
+            fetchDepth: 1
+            lfs: false
           - task: AzureStaticWebApp@0
             displayName: 'Deploy to Staging Static Web App'
             inputs:
