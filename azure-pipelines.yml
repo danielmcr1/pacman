@@ -1,0 +1,62 @@
+# trigger the pipeline on changes to the dev branch
+trigger:
+  branches:
+    include:
+      - dev
+
+# use an ubuntu agent for the pipeline jobs (self hosted for now)
+pool:
+  name: LocalMachine
+  demands: Agent.Name -equals Agent1
+
+stages:
+  # build stage: checkout, install dependencies, and build the application
+  - stage: Build
+    displayName: 'Build Stage'
+    jobs:
+      - job: BuildJob
+        displayName: 'Install and Build Application'
+        steps:
+          - checkout: self
+            clean: false
+            fetchDepth: 1
+            lfs: false
+          - script: |
+              echo "Installing dependencies..."
+              npm install
+            displayName: 'Install Dependencies'
+          - script: |
+              echo "Building the application..."
+              npm run build
+            displayName: 'Build Application'
+
+  # test stage: simulated testing step (replace with actual test commands, edit package json to add npm test script)
+  - stage: Test
+    displayName: 'Test Stage'
+    dependsOn: Build
+    jobs:
+      - job: TestJob
+        displayName: 'Simulated Testing'
+        steps:
+          - script: |
+              echo "Simulating tests."
+            displayName: 'Simulate Test Run'
+
+  # deploy stage: deploy the built app to the dev environment
+  - stage: Deploy
+    displayName: 'Deploy Stage'
+    dependsOn: Test
+    jobs:
+      - job: DeployDev
+        displayName: 'Deploy to Dev Environment'
+        variables:
+          - group: pacman-dev-vars  # load dev variables
+        steps:
+          - task: AzureStaticWebApp@0
+            displayName: 'Deploy to Dev Static Web App'
+            inputs:
+              app_location: '/'
+              api_location: 'null'
+              output_location: 'dist'
+              skip_app_build: true
+              azure_static_web_apps_api_token: '$(AZURE_STATIC_WEBAPPS_API_TOKEN)'
