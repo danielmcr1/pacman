@@ -58,18 +58,13 @@ stages:
           downloadPath: '$(Pipeline.Workspace)'
         displayName: 'Download Artifact'
 
-      - powershell: |
-          Write-Host "Updating Azure CLI static web app extension..."
-          az extension add --name staticwebapp --upgrade
+      - script: |
+          echo "Installing Static Web Apps CLI..."
+          npm install -g @azure/static-web-apps-cli
+        displayName: 'Install Static Web Apps CLI'
 
-          Write-Host "Logging in to Azure CLI using service principal..."
-          az login --service-principal -u $(AZURE_APP_ID) -p $(AZURE_APP_SECRET) --tenant $(AZURE_TENANT)
-          
-          Write-Host "Deploying to Azure Static Web App..."
-          az staticwebapp deploy `
-            --name $(WEBAPP_NAME) `
-            --resource-group $(RESOURCE_GROUP) `
-            --subscription $(AZURE_SUBSCRIPTION) `
-            --app-artifact-location "$(Pipeline.Workspace)\drop" `
-            --api-token $env:AZURE_STATIC_WEB_APPS_API_TOKEN
-        displayName: 'Deploy via Azure CLI'
+      - script: |
+          echo "Deploying to Azure Static Web App..."
+          swa deploy $(Pipeline.Workspace)/drop --deployment-token $(AZURE_STATIC_WEB_APPS_API_TOKEN)
+        displayName: 'Deploy via SWA CLI'
+
