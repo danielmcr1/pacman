@@ -1,104 +1,114 @@
-# This pipeline triggers when changes are made to dev, sit, or master branches
+# Trigger the pipeline on changes to the specified branches
 trigger:
   branches:
     include:
-      - dev
-      - sit
-      - master
+      - dev       # Development branch
+      - staging   # Staging branch
+      - production      # Production branch
 
-# Specifies the type of agent (a virtual machine) that will run the pipeline
+# Use an Ubuntu-based agent for the pipeline jobs
 pool:
   vmImage: 'ubuntu-latest'
 
-# Define the different stages in the pipeline
 stages:
 
-# Stage 1: Build and Test, this runs every time code is pushed to dev, sit, or master
+
+# Build Stage: Checkout, install dependencies, and build the application
+
 - stage: Build
-  displayName: 'Build and Test'
+  displayName: 'Build Stage'
   jobs:
-  - job: Build
+  - job: BuildJob
+    displayName: 'Install and Build Application'
     steps:
-    # Install Node.js (Required for running JavaScript applications like Pacman)
-    - task: NodeTool@0
-      inputs:
-        versionSpec: '14.x' # Using Node.js version 14
-      displayName: 'Install Node.js'
+      # checkout the repository with a shallow clone (depth 1), lfs off, and without cleaning the workspace
+      - checkout: self
+        clean: false
+        fetchDepth: 1
+        lfs: false
+      # install dependencies using npm
+      - script: |
+          echo "Installing dependencies..."
+          npm install
+        displayName: 'Install Dependencies'
+      # build the application using npm 
+      - script: |
+          echo "Building the application..."
+          npm run build
+        displayName: 'Build Application'
 
-    # Install all project dependencies from package.json
-    - script: npm install
-      displayName: 'Install Dependencies'
+# Test Stage: Simulated testing step (replace npm test after script is added in package json)
 
-    # Build the project 
-    - script: npm run build
-      displayName: 'Build Project'
-
-    # Run tests (can be replaced with real test commands)
-    - script: npm test
-      displayName: 'Run Tests'
-
-    # Save the build output as an artifact so it can be deployed later
-    - task: PublishBuildArtifacts@1
-      inputs:
-        PathtoPublish: 'dist' # Path to the built project
-        ArtifactName: 'drop' # Name of the artifact (folder where files are stored)
-        publishLocation: 'Container'
-      displayName: 'Publish Artifacts'
-
-# Stage 2: Deploy to SIT (System Integration Testing)
-- stage: Deploy_SIT
-  displayName: 'Deploy to SIT'
-  condition: and(succeeded(), eq(variables['Build.SourceBranchName'], 'sit')) # Only runs when merging to SIT branch
+- stage: Test
+  displayName: 'Test Stage'
+  dependsOn: Build  # only run if the Build stage succeeds
   jobs:
-  - deployment: SIT_Deploy
-    environment: SIT # Defines SIT environment in Azure DevOps
-    strategy:
-      runOnce:
-        deploy:
-          steps:
-          - script: echo "Deploying to SIT..."
-            displayName: 'Simulate SIT Deployment' # Replace this with actual deployment steps
+  - job: TestJob
+    displayName: 'Simulated Testing'
+    steps:
+      - script: |
+          # This is where  test commands would run.
+          # Replace the following line with: npm run test when tests are added.
+          echo "Simulating tests."
+        displayName: 'Simulate Test Run'
 
-          # Generate Release Notes for SIT
-          - script: |
-              echo "## SIT Release Notes" > release_notes_sit.md
-              echo "### Changes Deployed:" >> release_notes_sit.md
-              git log --oneline -n 10 >> release_notes_sit.md # Fetch last 10 commits
-            displayName: 'Generate SIT Release Notes'
+# deploy stage: deploy the built app to the azure static web app based on the branch
 
-          # Publish the SIT release notes as a pipeline artifact
-          - task: PublishBuildArtifacts@1
-            inputs:
-              PathtoPublish: 'release_notes_sit.md'
-              ArtifactName: 'SIT_Release_Notes'
-              publishLocation: 'Container'
-            displayName: 'Publish SIT Release Notes'
-
-# Stage 3: Deploy to Production
-- stage: Deploy_Production
-  displayName: 'Deploy to Production'
-  condition: and(succeeded(), eq(variables['Build.SourceBranchName'], 'master')) # Only runs when merging to master branch
+- stage: Deploy
+  displayName: 'Deploy Stage'
+  dependsOn: Test  # only run if the test stage succeeds
   jobs:
-  - deployment: PROD_Deploy
-    environment: Production # Defines Production environment in Azure DevOps
-    strategy:
-      runOnce:
-        deploy:
-          steps:
-          - script: echo "Deploying to Production..."
-            displayName: 'Simulate PROD Deployment' # Replace this with actual deployment steps
 
-          # Generate Release Notes for Production
-          - script: |
-              echo "## Production Release Notes" > release_notes_prod.md
-              echo "### Changes Deployed:" >> release_notes_prod.md
-              git log --oneline -n 10 >> release_notes_prod.md # Fetch last 10 commits
-            displayName: 'Generate Production Release Notes'
+  # deployment for the dev environment
 
-          # Publish the Production release notes as a pipeline artifact
-          - task: PublishBuildArtifacts@1
-            inputs:
-              PathtoPublish: 'release_notes_prod.md'
-              ArtifactName: 'Production_Release_Notes'
-              publishLocation: 'Container'
-            displayName: 'Publish Production Release Notes'
+  - job: DeployDev
+    displayName: 'Deploy to Dev Environment'
+    condition: eq(variables['Build.SourceBranch'], 'refs/heads/dev')  # only run for the dev branch
+    variables:
+      - group: pacman-dev-vars  # load environment specific variables (e.g. AZURE_STATIC_WEBAPPS_API_TOKEN)
+    steps:
+      - task: AzureStaticWebApp@0
+        displayName: 'Deploy to Dev Static Web App'
+        inputs:
+          # path to app code
+          app_location: '.'
+          # api location empty as no api is being used
+          api_location: ''
+          # output folder generated by the build
+          output_location: 'build'
+          # skip app build since the build stage already handled it
+          skip_app_build: true
+          # deployment token stored in your variable group 
+          azure_static_web_apps_api_token: '$(AZURE_STATIC_WEBAPPS_API_TOKEN)'
+
+  # deployment for the staging environment
+  - job: DeployStaging
+    displayName: 'Deploy to Staging Environment'
+    condition: eq(variables['Build.SourceBranch'], 'refs/heads/staging')  # only run for the staging branch
+    variables:
+      - group: pacman-st-vars  # load staging specific variables
+    steps:
+      - task: AzureStaticWebApp@0
+        displayName: 'Deploy to Staging Static Web App'
+        inputs:
+          app_location: '.'
+          api_location: ''
+          output_location: 'build'
+          skip_app_build: true
+          azure_static_web_apps_api_token: '$(AZURE_STATIC_WEBAPPS_API_TOKEN)'
+
+  # deployment for the production environment
+  - job: DeployProd
+    displayName: 'Deploy to Production Environment'
+    condition: eq(variables['Build.SourceBranch'], 'refs/heads/production')  # only run for the production branch
+    variables:
+      - group: pacman-prod-vars  # load production specific variables
+    steps:
+      - task: AzureStaticWebApp@0
+        displayName: 'Deploy to Production Static Web App'
+        inputs:
+          app_location: '.'
+          api_location: ''
+          output_location: 'build'
+          skip_app_build: true
+          azure_static_web_apps_api_token: '$(AZURE_STATIC_WEBAPPS_API_TOKEN)'
