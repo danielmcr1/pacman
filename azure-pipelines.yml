@@ -1,85 +1,65 @@
-# trigger the pipeline on changes to the production branch
+# This pipeline triggers when changes are made to the production branch
 trigger:
   branches:
     include:
       - production
 
-# use an ubuntu agent for the pipeline jobs (self hosted for now)
+# Specifies the type of agent (a self-hosted machine) that will run the pipeline
 pool:
   name: LocalMachine
   demands: Agent.Name -equals Agent1
 
-# define the stages of the pipeline
+# Define the different stages in the pipeline
 stages:
-  # build stage: checkout, install dependencies, and build the application
-  - stage: Build
-    displayName: 'Build Stage'
-    jobs:
-      - job: BuildJob
-        displayName: 'Install and Build Application'
-        steps:
-          - checkout: self
-            clean: false
-            fetchDepth: 1
-            lfs: false
-          - script: |
-              echo "Installing dependencies..."
-              npm install
-            displayName: 'Install Dependencies'
-          - script: |
-              echo "Building the application..."
-              npm run build
-            displayName: 'Build Application'
-          # save the build output as an artifact so it can be deployed later
-          - task: PublishBuildArtifacts@1
-            inputs:
-              PathtoPublish: 'dist' # path to the built project
-              ArtifactName: 'drop' # name of the artifact (folder where files are stored)
-              publishLocation: 'Container'
-            displayName: 'Publish Artifacts'
 
-  # test stage: simulated testing step (replace with npm test script in package.json)
-  - stage: Test
-    displayName: 'Test Stage'
-    dependsOn: Build
-    jobs:
-      - job: TestJob
-        displayName: 'Simulated Testing'
-        steps:
-          - checkout: self
-            clean: false
-            fetchDepth: 1
-            lfs: false
-          - script: |
-              echo "Simulating tests."
-            displayName: 'Simulate Test Run'
+# Stage 1: Build, this runs when code is pushed to the production branch
+- stage: Build
+  displayName: 'Build and Publish Artifact'
+  jobs:
+  - job: Build
+    steps:
+    
+    # Checkout the repository, disabling Git LFS (since it's not used)
+    - checkout: self
+      fetchDepth: 1
+      lfs: false  # Disable Git LFS
 
-  # deploy stage: deploy the built app to the production environment
-  - stage: Deploy
-    displayName: 'Deploy Stage'
-    dependsOn: Test
-    jobs:
-      - job: DeployProd
-        displayName: 'Deploy to Production Environment'
-        variables:
-          - group: pacman-prod-vars  # load production variables
-        steps:
-          - checkout: self
-            clean: false
-            fetchDepth: 1
-            lfs: false
-          - task: DownloadBuildArtifacts@0
-            displayName: 'Download Build Artifacts'
-            inputs:
-              buildType: 'current'
-              downloadType: 'single'
-              artifactName: 'drop'
-              downloadPath: '$(Pipeline.Workspace)'
-          - task: AzureStaticWebApp@0
-            displayName: 'Deploy to Production Static Web App'
-            inputs:
-              app_location: '/'
-              api_location: 'null'
-              output_location: '$(Pipeline.Workspace)/drop'
-              skip_app_build: true
-              azure_static_web_apps_api_token: '$(AZURE_STATIC_WEBAPPS_API_TOKEN)'
+    # Install all project dependencies from package.json
+    - powershell: |
+        npm install
+      displayName: 'Install Dependencies'
+
+    # Build the project
+    - powershell: |
+        npm run build
+      displayName: 'Build Project'
+
+    # Save the build output as an artifact so it can be deployed later
+    - task: PublishBuildArtifacts@1
+      inputs:
+        PathtoPublish: 'dist' # Path to the built project
+        ArtifactName: 'drop' # Name of the artifact (folder where files are stored)
+        publishLocation: 'Container'
+      displayName: 'Publish Artifacts'
+
+# Stage 2: Deploy to Azure Static Web Apps
+- stage: Deploy
+  displayName: 'Deploy to Azure Static Web Apps'
+  condition: and(succeeded(), eq(variables['Build.SourceBranchName'], 'production')) # Only runs on production branch
+  jobs:
+    - job: Deploy
+      steps:
+        # Checkout the repository and clean before deployment
+        - checkout: self
+          fetchDepth: 1
+          lfs: false  # Disable Git LFS
+          clean: true  # Clean the working directory before checkout
+
+        # Deploy to Azure Static Web Apps
+        - task: AzureStaticWebApp@0
+          inputs:
+            app_location: '/'  # Root of the app
+            api_location: 'null'  # No API used
+            output_location: 'dist'  # Build folder
+            azure_static_web_apps_api_token: $(AZURE_STATIC_WEBAPPS_API_TOKEN) # The secret token
+          displayName: 'Deploy to Azure Static Web Apps'
