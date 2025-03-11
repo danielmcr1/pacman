@@ -9,6 +9,7 @@ pool:
   name: LocalMachine
   demands: Agent.Name -equals Agent1
 
+# define the stages of the pipeline
 stages:
   # build stage: checkout, install dependencies, and build the application
   - stage: Build
@@ -30,7 +31,7 @@ stages:
               npm run build
             displayName: 'Build Application'
 
-  # test stage: simulated testing step (replace with actual test commands, edit package json to add npm test script)
+  # test stage: simulated testing step (replace with actual test commands, edit package.json to add npm test script)
   - stage: Test
     displayName: 'Test Stage'
     dependsOn: Build
@@ -52,6 +53,10 @@ stages:
         variables:
           - group: pacman-dev-vars  # load dev variables
         steps:
+          - checkout: self
+            clean: false
+            fetchDepth: 1
+            lfs: false
           - task: AzureStaticWebApp@0
             displayName: 'Deploy to Dev Static Web App'
             inputs:
