@@ -16,14 +16,11 @@ stages:
         pool:
           vmImage: 'ubuntu-latest'
         steps:
-          # dummy test step, placeholder since no tests currently exist
           - script: |
               echo "Running dummy tests..."
-              # Exit with 0 to indicate success (replace with real tests later)
               exit 0
             displayName: 'Run Dummy Tests'
 
-          # copy to the artifact staging directory
           - task: CopyFiles@2
             displayName: 'Copy necessary files for artifact'
             inputs:
@@ -35,7 +32,6 @@ stages:
                 index.html
               TargetFolder: '$(Build.ArtifactStagingDirectory)/drop'
 
-          # publish the copied files as an artifact named drop
           - task: PublishBuildArtifacts@1
             displayName: 'Publish Artifact'
             inputs:
@@ -50,26 +46,25 @@ stages:
     jobs:
       - deployment: DeployToStaticWebApp
         displayName: 'Deploy to Azure Static Web App'
-        environment: 'production'  
+        environment: 'production'
         pool:
           vmImage: 'ubuntu-latest'
         strategy:
           runOnce:
             deploy:
               steps:
-                # download the artifact published in the previous stage
                 - task: DownloadPipelineArtifact@2
                   displayName: 'Download Artifact'
                   inputs:
                     artifact: 'drop'
+                    targetPath: '$(Pipeline.Workspace)/drop'
 
-                # deploy to azure static web app using the downloaded artifact
                 - task: AzureStaticWebApp@0
                   displayName: 'Deploy to Azure Static Web App'
                   inputs:
-                    app_location: '$(Pipeline.Workspace)/drop'       
-                    api_location: ''                   
-                    output_location: ''
-                    skip_app_build: true               
+                    app_location: '$(Pipeline.Workspace)/drop'  
+                    api_location: ''
+                    output_location: 'build'  
+                    skip_app_build: true
                   env:
                     azure_static_web_apps_api_token: $(deployment_token)
