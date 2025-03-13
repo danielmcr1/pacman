@@ -4,7 +4,7 @@ trigger:
       - staging
 
 variables:
-  system.debug: true
+  - group: pacman-st-vars
 
 stages:
   # stage 1: build and test
