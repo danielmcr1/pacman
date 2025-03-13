@@ -3,11 +3,7 @@ trigger:
     include:
       - staging
 
-variables:
-  - group: pacman-st-vars  # link to variable group
-
 stages:
-  # stage 1: build and test
   - stage: BuildAndTest
     displayName: 'Build and Test Stage'
     jobs:
@@ -16,58 +12,52 @@ stages:
         pool:
           vmImage: 'ubuntu-latest'
         steps:
-          # install node.js
-          - task: NodeTool@0
-            inputs:
-              versionSpec: '18.x'
-            displayName: 'Install Node.js'
-
-          # install dependencies and build the project
-          - script: |
-              npm install
-              npm run build
-            displayName: 'Install Dependencies and Build'
-
-          # run dummy test (placeholder for npm test)
           - script: |
               echo "Running dummy tests..."
-              exit 0  # Simulates passing tests
+              exit 0
             displayName: 'Run Dummy Tests'
 
-          # publish build artifact
+          # List files in 'dist' to verify everything is included
+          - task: Bash@3
+            displayName: 'List dist/ contents'
+            inputs:
+              targetType: 'inline'
+              script: |
+                echo "Listing contents of dist/"
+                ls -R $(Build.SourcesDirectory)/dist
+
+          # Publish Build Artifact (Ensures all files from dist are included)
           - task: PublishBuildArtifacts@1
             displayName: 'Publish Build Artifact'
             inputs:
-              PathtoPublish: 'dist'  
+              PathtoPublish: 'dist'
               ArtifactName: 'pacman-build'
               publishLocation: 'Container'
 
-  # stage 2: deploy
   - stage: Deploy
     displayName: 'Deploy Stage'
     dependsOn: BuildAndTest
     jobs:
-      - deployment: DeployToAzure
+      - deployment: DeployToStaticWebApp
         displayName: 'Deploy to Azure Static Web App'
-        environment: 'staging'  
+        environment: 'staging'
         pool:
           vmImage: 'ubuntu-latest'
         strategy:
           runOnce:
             deploy:
               steps:
-                # download the build artifact
                 - task: DownloadPipelineArtifact@2
-                  displayName: 'Download Build Artifact'
+                  displayName: 'Download Artifact'
                   inputs:
                     artifact: 'pacman-build'
-                    path: '$(Pipeline.Workspace)/pacman-build'
 
-                # deploy to azure static web app
                 - task: AzureStaticWebApp@0
                   displayName: 'Deploy to Azure Static Web App'
                   inputs:
-                    app_location: '$(Pipeline.Workspace)/pacman-build'
-                    output_location: '.'  # no extra build required
+                    app_location: '/'
+                    api_location: ''
+                    output_location: 'dist'  # Make sure Azure deploys from 'dist'
+                    skip_app_build: true
                   env:
-                    azure_static_web_apps_api_token: $(deployment_token)  
+                    azure_static_web_apps_api_token: $(deployment_token)
