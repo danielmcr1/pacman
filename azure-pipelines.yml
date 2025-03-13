@@ -3,6 +3,9 @@ trigger:
     include:
       - staging
 
+variables:
+  system.debug: true
+
 stages:
   # stage 1: build and test
   - stage: BuildAndTest
