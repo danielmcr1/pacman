@@ -12,10 +12,22 @@ stages:
         pool:
           vmImage: 'ubuntu-latest'
         steps:
-          - script: |
-              echo "Running dummy tests..."
-              exit 0
-            displayName: 'Run Dummy Tests'
+          - task: NodeTool@0
+            inputs:
+              versionSpec: '14.x'
+            displayName: 'Install Node.js'
+
+          - task: Npm@1
+            inputs:
+              command: 'install'
+            displayName: 'Install Dependencies'
+
+          # Run the build command (ensure dist folder is created)
+          - task: Npm@1
+            inputs:
+              command: 'custom'
+              customCommand: 'run build'  # Make sure this generates the 'dist' folder
+            displayName: 'Run Build Command'
 
           # List files in 'dist' to verify everything is included
           - task: Bash@3
@@ -57,7 +69,7 @@ stages:
                   inputs:
                     app_location: '/'
                     api_location: ''
-                    output_location: 'dist'  # Make sure Azure deploys from 'dist'
+                    output_location: 'dist'  # Ensure Azure deploys from 'dist'
                     skip_app_build: true
                   env:
                     azure_static_web_apps_api_token: $(deployment_token)
