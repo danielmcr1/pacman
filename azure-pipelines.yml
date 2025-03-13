@@ -1,70 +1,72 @@
 trigger:
   branches:
     include:
-      - production
-
-pool:
-  name: LocalMachine
-  demands: Agent.Name -equals Agent1
-
-variables:
-- group: pacman-prod-vars
+      - staging
 
 stages:
+  # stage 1: build and test
+  - stage: BuildAndTest
+    displayName: 'Build and Test Stage'
+    jobs:
+      - job: BuildAndTest
+        displayName: 'Build and Test Job'
+        pool:
+          vmImage: 'ubuntu-latest'
+        steps:
+          # Dummy test step – placeholder since no tests currently exist
+          - script: |
+              echo "Running dummy tests..."
+              # Exit with 0 to indicate success (replace with real tests later)
+              exit 0
+            displayName: 'Run Dummy Tests'
 
-# stage 1: build and publish artifact
-- stage: Build
-  displayName: 'Build and Publish Artifact'
-  jobs:
-  - job: Build
-    displayName: 'Build Job'
-    steps:
-      - checkout: self
-        fetchDepth: 1
-        lfs: false
-        clean: false
+          # copy to the artifact staging directory
+          - task: CopyFiles@2
+            displayName: 'Copy necessary files for artifact'
+            inputs:
+              SourceFolder: '$(Build.SourcesDirectory)'
+              Contents: |
+                assets/**
+                bundle.js
+                index.css
+                index.html
+              TargetFolder: '$(Build.ArtifactStagingDirectory)/drop'
 
-      - powershell: |
-          npm install
-        displayName: 'Install Dependencies'
+          # publish the copied files as an artifact named drop
+          - task: PublishBuildArtifacts@1
+            displayName: 'Publish Artifact'
+            inputs:
+              PathtoPublish: '$(Build.ArtifactStagingDirectory)/drop'
+              ArtifactName: 'drop'
+              publishLocation: 'Container'
 
-      - powershell: |
-          npm run build
-        displayName: 'Build Project'
+  # stage 2: deploy to azure static web app
+  - stage: Deploy
+    displayName: 'Deploy Stage'
+    dependsOn: BuildAndTest
+    jobs:
+      - deployment: DeployToStaticWebApp
+        displayName: 'Deploy to Azure Static Web App'
+        environment: 'staging'  
+        pool:
+          vmImage: 'ubuntu-latest'
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                # download the artifact published in the previous stage
+                - task: DownloadPipelineArtifact@2
+                  displayName: 'Download Artifact'
+                  inputs:
+                    artifact: 'drop'
 
-      - task: PublishBuildArtifacts@1
-        inputs:
-          PathtoPublish: 'dist'       # folder containing built project
-          ArtifactName: 'drop'         # artifact name
-          publishLocation: 'Container'
-        displayName: 'Publish Artifacts'
-
-# stage 2: deploy to azure static web apps with azure cli
-- stage: Deploy_StaticWebApp
-  displayName: 'Deploy to Azure Static Web Apps'
-  condition: and(succeeded(), eq(variables['Build.SourceBranchName'], 'production'))
-  jobs:
-  - job: Deploy
-    displayName: 'Deploy to Azure Static Web Apps'
-    steps:
-      - checkout: self
-        fetchDepth: 1
-        lfs: false
-        clean: false
-
-      - task: DownloadBuildArtifacts@0
-        inputs:
-          artifactName: 'drop'
-          downloadPath: '$(Pipeline.Workspace)'
-        displayName: 'Download Artifact'
-
-      - script: |
-          echo "Installing Static Web Apps CLI..."
-          npm install -g @azure/static-web-apps-cli
-        displayName: 'Install Static Web Apps CLI'
-
-      - script: |
-          echo "Deploying to Azure Static Web App..."
-          swa deploy $(Pipeline.Workspace)/drop --deployment-token $(AZURE_STATIC_WEB_APPS_API_TOKEN) --app-location .
-        displayName: 'Deploy via SWA CLI'
-
+                # deploy to azure static web app using the downloaded artifact
+                - task: AzureStaticWebApp@0
+                  displayName: 'Deploy to Azure Static Web App'
+                  inputs:
+                    app_location: $(app_location)       
+                    api_location: ''                   
+                    output_location: $(output_location)
+                    skip_app_build: true               
+                  env:
+                    azure_static_web_apps_api_token: $(deployment_token)
