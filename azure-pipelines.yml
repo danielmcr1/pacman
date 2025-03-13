@@ -50,7 +50,7 @@ stages:
     jobs:
       - deployment: DeployToStaticWebApp
         displayName: 'Deploy to Azure Static Web App'
-        environment: 'staging'  
+        environment: 'production'  
         pool:
           vmImage: 'ubuntu-latest'
         strategy:
