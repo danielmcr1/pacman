@@ -62,9 +62,9 @@ stages:
                 - task: AzureStaticWebApp@0
                   displayName: 'Deploy to Azure Static Web App'
                   inputs:
-                    app_location: '$(Pipeline.Workspace)/drop'  
+                    app_location: '/home/site/wwwroot/pacman'  
                     api_location: ''
-                    output_location: "dist"  
+                    output_location: '/home/site/wwwroot/'  
                     skip_app_build: true
                   env:
                     azure_static_web_apps_api_token: $(deployment_token)
