@@ -1,81 +1,76 @@
-# trigger the pipeline on changes to the dev branch
+# trigger the pipeline on pushes to the 'dev' branch
 trigger:
   branches:
     include:
       - dev
 
-# use an ubuntu agent for the pipeline jobs (self hosted for now)
+# use a microsoft hosted ubuntu agent for all stages
 pool:
-  name: LocalMachine
-  demands: Agent.Name -equals Agent1
+  vmImage: 'ubuntu-latest'
 
-# define the stages of the pipeline
+# load variables from the variable group pacman-dev-vars
+variables:
+- group: pacman-dev-vars
+
 stages:
-  # build stage: checkout, install dependencies, and build the application
-  - stage: Build
-    displayName: 'Build Stage'
-    jobs:
-      - job: BuildJob
-        displayName: 'Install and Build Application'
-        steps:
-          - checkout: self
-            clean: false
-            fetchDepth: 1
-            lfs: false
-          - script: |
-              echo "Installing dependencies..."
-              npm install
-            displayName: 'Install Dependencies'
-          - script: |
-              echo "Building the application..."
-              npm run build
-            displayName: 'Build Application'
-          # save the build output as an artifact so it can be deployed later
-          - task: PublishBuildArtifacts@1
-            inputs:
-              PathtoPublish: 'dist' # path to the built project
-              ArtifactName: 'drop' # name of the artifact (folder where files are stored)
-              publishLocation: 'Container'
-            displayName: 'Publish Artifacts'
 
-  # test stage: simulated testing step (replace with actual test commands, edit package.json to add npm test script)
-  - stage: Test
-    displayName: 'Test Stage'
-    dependsOn: Build
-    jobs:
-      - job: TestJob
-        displayName: 'Simulated Testing'
-        steps:
-          - script: |
-              echo "Simulating tests."
-            displayName: 'Simulate Test Run'
+# stage 1: build and publish artifact
 
-  # deploy stage: deploy the built app to the dev environment
-  - stage: Deploy
-    displayName: 'Deploy Stage'
-    dependsOn: Test
-    jobs:
-      - job: DeployDev
-        displayName: 'Deploy to Dev Environment'
-        variables:
-          - group: pacman-dev-vars  # load dev variables
-        steps:
-          - checkout: self
-            clean: false
-            fetchDepth: 1
-            lfs: false
-          - task: DownloadBuildArtifacts@0
-            displayName: 'Download Build Artifacts'
-            inputs:
-              buildType: 'current'
-              downloadType: 'single'
-              artifactName: 'drop'
-              downloadPath: '$(Pipeline.Workspace)'
-          - task: AzureStaticWebApp@0
-            displayName: 'Deploy to Dev Static Web App'
-            inputs:
-              app_location: '/'
-              api_location: 'null'
-              output_location: '$(Pipeline.Workspace)/drop'
-              skip_app_build: true
-              azure_static_web_apps_api_token: '$(AZURE_STATIC_WEBAPPS_API_TOKEN)'
+- stage: Build
+  displayName: 'Build and Publish Artifact'
+  jobs:
+  - job: Build
+    displayName: 'Build Job'
+    pool:
+      vmImage: 'ubuntu-latest'   # use ubuntu agent for build
+    steps:
+      # checkout the repository
+      - checkout: self
+        fetchDepth: 1
+        lfs: false
+        clean: false
+
+      # install project dependencies (
+      - script: npm install
+        displayName: 'Install Dependencies'
+
+      # build the project
+      - script: npm run build
+        displayName: 'Build Project'
+
+      # publish the dist folder as an artifact named drop
+      - task: PublishPipelineArtifact@1
+        inputs:
+          targetPath: 'dist'
+          artifact: drop
+        displayName: 'Publish Artifact'
+
+
+# stage 2: deploy to azure static web apps
+
+- stage: Deploy
+  displayName: 'Deploy to Azure Static Web Apps'
+  dependsOn: Build
+  # only run this stage if the source branch is dev
+  condition: eq(variables['Build.SourceBranchName'], 'dev')
+  jobs:
+  - job: Deploy
+    displayName: 'Deploy Job'
+    pool:
+      vmImage: 'ubuntu-latest'   # use ubuntu agent for deployment
+    steps:
+      # download the published artifact into the pipeline workspace
+      - task: DownloadPipelineArtifact@2
+        inputs:
+          artifact: drop
+          path: '$(Pipeline.Workspace)/drop'
+        displayName: 'Download Artifact'
+
+      # deploy to azure static web apps using the built in task
+   
+      - task: AzureStaticWebApp@0
+        inputs:
+          app_location: '$(Pipeline.Workspace)/drop'   # location of the pre built app
+          skip_app_build: true
+          azure_static_web_apps_api_token: $(AZURE_STATIC_WEB_APPS_API_TOKEN)
+        displayName: 'Deploy via Azure Static Web Apps Task'
