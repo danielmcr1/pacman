@@ -1,84 +1,72 @@
-# trigger the pipeline on changes to the staging branch
 trigger:
   branches:
     include:
       - staging
 
-# use an ubuntu agent for the pipeline jobs (self hosted for now)
-pool:
-  name: LocalMachine
-  demands: Agent.Name -equals Agent1
-
 stages:
-  # build stage: checkout, install dependencies, and build the application
-  - stage: Build
-    displayName: 'Build Stage'
+  # stage 1: build and test
+  - stage: BuildAndTest
+    displayName: 'Build and Test Stage'
     jobs:
-      - job: BuildJob
-        displayName: 'Install and Build Application'
+      - job: BuildAndTest
+        displayName: 'Build and Test Job'
+        pool:
+          vmImage: 'ubuntu-latest'
         steps:
-          - checkout: self
-            clean: false
-            fetchDepth: 1
-            lfs: false
+          # dummy test step, placeholder since no tests currently exist
           - script: |
-              echo "Installing dependencies..."
-              npm install
-            displayName: 'Install Dependencies'
-          - script: |
-              echo "Building the application..."
-              npm run build
-            displayName: 'Build Application'
-          # save the build output as an artifact so it can be deployed later
-          - task: PublishBuildArtifacts@1
+              echo "Running dummy tests..."
+              # Exit with 0 to indicate success (replace with real tests later)
+              exit 0
+            displayName: 'Run Dummy Tests'
+
+          # copy to the artifact staging directory
+          - task: CopyFiles@2
+            displayName: 'Copy necessary files for artifact'
             inputs:
-              PathtoPublish: 'dist' # path to the built project
-              ArtifactName: 'drop' # name of the artifact (folder where files are stored)
+              SourceFolder: '$(Build.SourcesDirectory)'
+              Contents: |
+                assets/**
+                bundle.js
+                index.css
+                index.html
+              TargetFolder: '$(Build.ArtifactStagingDirectory)/drop'
+
+          # publish the copied files as an artifact named drop
+          - task: PublishBuildArtifacts@1
+            displayName: 'Publish Artifact'
+            inputs:
+              PathtoPublish: '$(Build.ArtifactStagingDirectory)/drop'
+              ArtifactName: 'drop'
               publishLocation: 'Container'
-            displayName: 'Publish Artifacts'
 
-  # test stage: simulated testing step (replace with npm test script in package.json)
-  - stage: Test
-    displayName: 'Test Stage'
-    dependsOn: Build
-    jobs:
-      - job: TestJob
-        displayName: 'Simulated Testing'
-        steps:
-          - checkout: self
-            clean: false
-            fetchDepth: 1
-            lfs: false
-          - script: |
-              echo "Simulating tests."
-            displayName: 'Simulate Test Run'
-
-  # deploy stage: deploy the built app to the staging environment
+  # stage 2: deploy to azure static web app
   - stage: Deploy
     displayName: 'Deploy Stage'
-    dependsOn: Test
+    dependsOn: BuildAndTest
     jobs:
-      - job: DeployStaging
-        displayName: 'Deploy to Staging Environment'
-        variables:
-          - group: pacman-st-vars  # load staging variables
-        steps:
-          - checkout: self
-            clean: false
-            fetchDepth: 1
-            lfs: false
-          - task: DownloadBuildArtifacts@0
-            displayName: 'Download Build Artifacts'
-            inputs:
-              buildType: 'current'
-              downloadType: 'single'
-              artifactName: 'drop'
-              downloadPath: '$(Pipeline.Workspace)'
-          - task: AzureStaticWebApp@0
-            displayName: 'Deploy to Staging Static Web App'
-            inputs:
-              app_location: '/'
-              api_location: 'null'
-              output_location: '$(Pipeline.Workspace)/drop'
-              skip_app_build: true
-              azure_static_web_apps_api_token: '$(AZURE_STATIC_WEBAPPS_API_TOKEN)'
+      - deployment: DeployToStaticWebApp
+        displayName: 'Deploy to Azure Static Web App'
+        environment: 'staging'  
+        pool:
+          vmImage: 'ubuntu-latest'
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                # download the artifact published in the previous stage
+                - task: DownloadPipelineArtifact@2
+                  displayName: 'Download Artifact'
+                  inputs:
+                    artifact: 'drop'
+
+                # deploy to azure static web app using the downloaded artifact
+                - task: AzureStaticWebApp@0
+                  displayName: 'Deploy to Azure Static Web App'
+                  inputs:
+                    app_location: $(app_location)       
+                    api_location: ''                   
+                    output_location: $(output_location)
+                    skip_app_build: true               
+                  env:
+                    azure_static_web_apps_api_token: $(deployment_token)
