@@ -64,7 +64,7 @@ stages:
                   inputs:
                     app_location: '$(Pipeline.Workspace)/drop'  
                     api_location: ''
-                    output_location: 'build'  
+                    output_location: "dist"  
                     skip_app_build: true
                   env:
                     azure_static_web_apps_api_token: $(deployment_token)
