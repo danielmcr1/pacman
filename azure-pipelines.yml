@@ -1,0 +1,99 @@
+trigger:
+  branches:
+    include:
+      - st
+
+variables:
+  - group: pacman-st-vars  
+
+stages:
+  - stage: BuildAndTest
+    displayName: 'Build and Test Stage'
+    jobs:
+      - job: BuildAndTest
+        displayName: 'Build and Test Job'
+        pool:
+          vmImage: 'ubuntu-latest'
+        steps:
+          - task: NodeTool@0
+            inputs:
+              versionSpec: '18.x'
+            displayName: 'Install Node.js 18'
+
+          # install dependencies 
+          - task: Bash@3
+            displayName: 'Install Dependencies (npm install)'
+            inputs:
+              targetType: 'inline'
+              script: |
+                echo "Running npm install..."
+                npm install --no-audit --prefer-offline
+
+          # run the build command (creating the dist folder)
+          - task: Bash@3
+            displayName: 'Run Build Command'
+            inputs:
+              targetType: 'inline'
+              script: |
+                echo "Running npm run build..."
+                npm run build
+
+          # making sure assets folder, index.html, and index.css are included in dist
+          - task: Bash@3
+            displayName: 'Ensure Assets and HTML/CSS are in dist'
+            inputs:
+              targetType: 'inline'
+              script: |
+                echo "Ensuring assets, index.html, and index.css are in dist/..."
+                mkdir -p $(Build.SourcesDirectory)/dist/assets
+                cp -r $(Build.SourcesDirectory)/assets/* $(Build.SourcesDirectory)/dist/assets/ 2>/dev/null || echo "No assets to copy"
+                cp $(Build.SourcesDirectory)/index.html $(Build.SourcesDirectory)/dist/index.html 2>/dev/null || echo "No index.html found"
+                cp $(Build.SourcesDirectory)/index.css $(Build.SourcesDirectory)/dist/index.css 2>/dev/null || echo "No index.css found"
+
+          # list contents of dist to see if everything is included
+          - task: Bash@3
+            displayName: 'List dist/ contents'
+            inputs:
+              targetType: 'inline'
+              script: |
+                echo "Listing contents of dist/"
+                ls -R $(Build.SourcesDirectory)/dist
+
+          # publish the dist folder as an artifact
+          - task: PublishBuildArtifacts@1
+            displayName: 'Publish Build Artifact'
+            inputs:
+              PathtoPublish: 'dist'
+              ArtifactName: 'pacman-build'
+              publishLocation: 'Container'
+
+  - stage: Deploy
+    displayName: 'Deploy Stage'
+    dependsOn: BuildAndTest
+    jobs:
+      - deployment: DeployToStaticWebApp
+        displayName: 'Deploy to Azure Static Web App'
+        environment: 'staging'
+        pool:
+          vmImage: 'ubuntu-latest'
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - task: DownloadPipelineArtifact@2
+                  displayName: 'Download Artifact'
+                  inputs:
+                    artifact: 'pacman-build'
+                    # download the artifact into the working directory so that "pacman-build" exists there
+                    targetPath: '$(System.DefaultWorkingDirectory)/pacman-build'
+                
+                - task: AzureStaticWebApp@0
+                  displayName: 'Deploy to Azure Static Web App'
+                  inputs:
+                    # pacman-build folder should now exist in the working directory
+                    app_location: 'pacman-build'
+                    api_location: ''
+                    output_location: ''
+                    skip_app_build: true
+                  env:
+                    azure_static_web_apps_api_token: $(deployment_token)
