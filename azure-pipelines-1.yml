@@ -6,11 +6,11 @@ pr:
 
 variables:
 - group: pacman-prod-vars
-- name: APP_LOCATION
+- name: MY_APP_LOCATION
   value: "/"
-- name: API_LOCATION
+- name: MY_API_LOCATION
   value: ""
-- name: APP_ARTIFACT_LOCATION
+- name: MY_APP_ARTIFACT_LOCATION
   value: "/"
 
 stages:
@@ -27,8 +27,7 @@ stages:
     - task: AzureStaticWebApp@0
       displayName: "Deploy to Azure Static Web Apps"
       inputs:
-        app_location: '$(APP_LOCATION)'
-        api_location: '$(API_LOCATION)'
-        output_location: '$(APP_ARTIFACT_LOCATION)'
-        azure_static_web_apps_api_token: '$(AZURE_STATIC_WEB_APPS_API_TOKEN)'
-
+        app_location: '$(MY_APP_LOCATION)'
+        api_location: '$(MY_API_LOCATION)'
+        output_location: '$(MY_APP_ARTIFACT_LOCATION)'
+        azure_static_web_apps_api_token: '$(AZURE_STATIC_WEB_APPS_API_TOKEN_PROD)'
