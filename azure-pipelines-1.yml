@@ -1,78 +1,34 @@
 trigger:
-  branches:
-    include:
-      - master
+- master
 
 pr:
-  branches:
-    include:
-      - master
+- master
 
 variables:
-  - group: pacman-prod-vars
-  - name: NODE_VERSION
-    value: '18.x'
+- group: pacman-prod-vars
+- name: APP_LOCATION
+  value: "/"
+- name: API_LOCATION
+  value: ""
+- name: APP_ARTIFACT_LOCATION
+  value: "/"
 
 stages:
-- stage: Build
-  displayName: 'Build Stage'
+- stage: BuildAndDeploy
+  displayName: "Build and Deploy"
   jobs:
-  - job: Build
-    displayName: 'Build Job'
+  - job: BuildDeploy
+    displayName: "Build and Deploy Job"
     pool:
       vmImage: 'ubuntu-latest'
     steps:
     - checkout: self
-
-    - task: UseNode@1
-      displayName: 'Set up Node.js'
+      submodules: true
+    - task: AzureStaticWebApp@0
+      displayName: "Deploy to Azure Static Web Apps"
       inputs:
-        version: '$(NODE_VERSION)'
+        app_location: '$(APP_LOCATION)'
+        api_location: '$(API_LOCATION)'
+        output_location: '$(APP_ARTIFACT_LOCATION)'
+        azure_static_web_apps_api_token: '$(AZURE_STATIC_WEB_APPS_API_TOKEN)'
 
-    - script: |
-        npm install
-        npm run build
-      displayName: 'Install dependencies and build'
-
-    - task: ArchiveFiles@2
-      displayName: 'Zip artifact for deployment'
-      inputs:
-        rootFolderOrFile: '$(Build.SourcesDirectory)/build'
-        includeRootFolder: false
-        archiveFile: '$(Build.ArtifactStagingDirectory)/pacman-prod.zip'
-
-    - task: PublishBuildArtifacts@1
-      displayName: 'Upload Artifact'
-      inputs:
-        pathToPublish: '$(Build.ArtifactStagingDirectory)/pacman-prod.zip'
-        artifactName: 'pacman-prod'
-
-- stage: Deploy
-  displayName: 'Deploy Stage'
-  dependsOn: Build
-  jobs:
-  - deployment: DeployToAzure
-    displayName: 'Deploy to Azure Static Web App'
-    environment: Production
-    pool:
-      vmImage: 'ubuntu-latest'
-    strategy:
-      runOnce:
-        deploy:
-          steps:
-          - task: DownloadBuildArtifacts@0
-            displayName: 'Download Artifact'
-            inputs:
-              artifactName: 'pacman-prod'
-              downloadPath: '$(Build.ArtifactStagingDirectory)'
-
-          - script: unzip $(Build.ArtifactStagingDirectory)/pacman-prod/pacman-prod.zip -d $(Build.ArtifactStagingDirectory)
-            displayName: 'Unzip artifact'
-
-          - task: AzureStaticWebApp@0
-            displayName: 'Deploy to Azure Static Web App'
-            inputs:
-              azure_static_web_apps_api_token: $(AZURE_STATIC_WEB_APPS_API_TOKEN)
-              app_location: '$(Build.ArtifactStagingDirectory)/build'
-              output_location: ''
-              skip_app_build: true
