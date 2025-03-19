@@ -4,8 +4,9 @@
   "description": "Pacman WebVR",
   "main": "index.js",
   "scripts": {
-    "start": "webpack-dev-server --mode development --open --hot --host 0.0.0.0 --port 8080 --https",
-    "build": "webpack --mode production"
+    "start": "webpack-dev-server --mode development --open --hot",
+    "build": "webpack --mode production",
+    "postinstall": "patch-package"
   },
   "author": "Qian Sha",
   "license": "MIT",
@@ -15,6 +16,8 @@
     "babel-plugin-transform-runtime": "^6.23.0",
     "babel-preset-env": "^1.7.0",
     "file-loader": "^3.0.1",
+    "patch-package": "^8.0.0",
+    "postinstall-postinstall": "^2.1.0",
     "webpack": "^4.21.0",
     "webpack-cli": "^3.1.2",
     "webpack-dev-server": "^3.1.9"
