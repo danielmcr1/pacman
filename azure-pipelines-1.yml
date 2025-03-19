@@ -1,9 +1,9 @@
 # triggering the pipeline on changes to the st branch
 trigger:
-- dev
+- st
 
 pr:
-- dev  # the pipeline is triggered for PRs that are targeted at the st branch
+- st  # the pipeline is triggered for PRs that are targeted at the st branch
 
 # deployment tokens are stored in the variable group
 variables:
