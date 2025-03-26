@@ -2,12 +2,12 @@
 trigger:
   branches:
     include:
-      - team*
+      - team4
 
 pr:
   branches:
     include:
-      - team*
+      - team4
 
 # deployment tokens are stored in the variable group pacman-vars
 variables:
@@ -34,31 +34,11 @@ stages:
     - checkout: self
       submodules: true
 
-    # set the correct deployment token based on the branch name
-    - bash: |
-         echo "Current branch: $(Build.SourceBranchName)"
-         if [ "$(Build.SourceBranchName)" = "team1" ]; then
-           echo "Using token for team1"
-           echo "##vso[task.setvariable variable=AZURE_TOKEN]$(AZURE_STATIC_WEB_APPS_API_TOKEN_TEAM1)"
-         elif [ "$(Build.SourceBranchName)" = "team2" ]; then
-           echo "Using token for team2"
-           echo "##vso[task.setvariable variable=AZURE_TOKEN]$(AZURE_STATIC_WEB_APPS_API_TOKEN_TEAM2)"
-         elif [ "$(Build.SourceBranchName)" = "team3" ]; then
-           echo "Using token for team3"
-           echo "##vso[task.setvariable variable=AZURE_TOKEN]$(AZURE_STATIC_WEB_APPS_API_TOKEN_TEAM3)"
-         elif [ "$(Build.SourceBranchName)" = "team4" ]; then
-           echo "Using token for team4"
-           echo "##vso[task.setvariable variable=AZURE_TOKEN]$(AZURE_STATIC_WEB_APPS_API_TOKEN_TEAM4)"
-         else
-           echo "Branch not recognized. Token not set."
-         fi
-      displayName: "Set deployment token dynamically"
-
-    # deploy to azure static web apps using the dynamically set token
+   
     - task: AzureStaticWebApp@0
       displayName: "Deploy to Azure Static Web Apps"
       inputs:
         app_location: '$(MY_APP_LOCATION)'
         api_location: '$(MY_API_LOCATION)'
         output_location: '$(MY_APP_ARTIFACT_LOCATION)'
-        azure_static_web_apps_api_token: '$(AZURE_TOKEN)'
+        azure_static_web_apps_api_token: '$(deployment token)'
